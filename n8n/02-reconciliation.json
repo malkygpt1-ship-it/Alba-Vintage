@@ -1,0 +1,14 @@
+{
+  "name":"Alba Vintage — Inventory Reconciliation",
+  "nodes":[
+    {"parameters":{"rule":{"interval":[{"field":"minutes","minutesInterval":15}]}},"id":"schedule","name":"Every 15 Minutes","type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[-520,0]},
+    {"parameters":{"operation":"executeQuery","query":"select i.sku,i.status,l.channel,l.external_listing_id,l.status as listing_status from inventory_items i join channel_listings l on l.inventory_id=i.id where i.status='SOLD' and l.status='ACTIVE';"},"id":"db","name":"Find Sold Items Still Active","type":"n8n-nodes-base.postgres","typeVersion":2.5,"position":[-280,0]},
+    {"parameters":{"conditions":{"options":{"caseSensitive":true,"typeValidation":"strict","version":2},"conditions":[{"leftValue":"={{$json.sku}}","rightValue":"","operator":{"type":"string","operation":"notEmpty"}}],"combinator":"and"}},"id":"if","name":"Discrepancy Found?","type":"n8n-nodes-base.if","typeVersion":2.2,"position":[0,0]},
+    {"parameters":{"method":"POST","url":"={{ $env.ALBA_ALERT_WEBHOOK || 'https://YOUR-N8N-WEBHOOK/alerts' }}","sendBody":true,"contentType":"json","jsonBody":"={{ JSON.stringify({type:'INVENTORY_DISCREPANCY',sku:$json.sku,channel:$json.channel,listingId:$json.external_listing_id}) }}"},"id":"alert","name":"Alert Operator","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[260,0]}
+  ],
+  "connections":{"Every 15 Minutes":{"main":[[{"node":"Find Sold Items Still Active","type":"main","index":0}]]},"Find Sold Items Still Active":{"main":[[{"node":"Discrepancy Found?","type":"main","index":0}]]},"Discrepancy Found?":{"main":[[{"node":"Alert Operator","type":"main","index":0}],[]]}},
+  "active":false,
+  "settings":{"executionOrder":"v1"},
+  "versionId":"alba-reconciliation-v1",
+  "meta":{"templateCredsSetupCompleted":false}
+}
