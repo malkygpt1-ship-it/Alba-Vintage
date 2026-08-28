@@ -2,36 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const USERNAME = process.env.ALBA_AUTH_USER || 'Malky'
 const PASSWORD = process.env.ALBA_AUTH_PASSWORD || 'js845209b'
+const COOKIE_NAME = 'alba_session'
 
-export function proxy(request: NextRequest) {
-  const authorization = request.headers.get('authorization')
+async function sessionToken() {
+  const data = new TextEncoder().encode(`${USERNAME}:${PASSWORD}`)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
-  if (authorization?.startsWith('Basic ')) {
-    const encoded = authorization.slice(6)
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
 
-    try {
-      const decoded = atob(encoded)
-      const separator = decoded.indexOf(':')
-      const username = separator >= 0 ? decoded.slice(0, separator) : ''
-      const password = separator >= 0 ? decoded.slice(separator + 1) : ''
-
-      if (username === USERNAME && password === PASSWORD) {
-        return NextResponse.next()
-      }
-    } catch {
-      // Fall through to the authentication challenge for malformed credentials.
-    }
+  // Allow the login page and login endpoint through without authentication.
+  if (pathname === '/login' || pathname === '/api/login') {
+    return NextResponse.next()
   }
 
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="Alba Vintage", charset="UTF-8"',
-      'Cache-Control': 'no-store',
-    },
-  })
+  const expectedToken = await sessionToken()
+  const suppliedToken = request.cookies.get(COOKIE_NAME)?.value
+
+  if (suppliedToken === expectedToken) {
+    return NextResponse.next()
+  }
+
+  const loginUrl = request.nextUrl.clone()
+  loginUrl.pathname = '/login'
+  loginUrl.searchParams.set('from', pathname)
+  return NextResponse.redirect(loginUrl)
 }
 
 export const config = {
-  matcher: '/:path*',
+  matcher: ['/:path*'],
 }
