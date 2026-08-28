@@ -1,0 +1,83 @@
+{
+  "name": "Alba Vintage — Sale Router",
+  "nodes": [
+    {
+      "parameters": {"httpMethod":"POST","path":"alba/sale","responseMode":"onReceived"},
+      "id":"sale-webhook",
+      "name":"Marketplace Sale Webhook",
+      "type":"n8n-nodes-base.webhook",
+      "typeVersion":2,
+      "position":[-760,0],
+      "webhookId":"alba-sale"
+    },
+    {
+      "parameters": {"jsCode":"const body = $json.body ?? $json;\nreturn [{ json: { platform: body.platform, eventId: String(body.eventId ?? body.orderId ?? `${body.platform}:${body.sku}:${body.timestamp}`), orderId: body.orderId ?? null, sku: body.sku, salePence: Number(body.salePence ?? 0), feePence: Number(body.feePence ?? 0), postagePence: Number(body.postagePence ?? 0), soldAt: body.soldAt ?? new Date().toISOString(), raw: body } }];"},
+      "id":"normalise",
+      "name":"Normalise Sale Event",
+      "type":"n8n-nodes-base.code",
+      "typeVersion":2,
+      "position":[-520,0]
+    },
+    {
+      "parameters":{"operation":"executeQuery","query":"insert into automation_events(event_key,event_type,platform,sku,payload,status,attempts) values ($1,'SALE',$2,$3,$4::jsonb,'PROCESSING',1) on conflict (event_key) do update set attempts=automation_events.attempts+1 returning *;","options":{"queryReplacement":"={{ [$json.platform + ':' + $json.eventId, $json.platform, $json.sku, JSON.stringify($json)] }}"}},
+      "id":"event-db",
+      "name":"Record / Deduplicate Event",
+      "type":"n8n-nodes-base.postgres",
+      "typeVersion":2.5,
+      "position":[-280,0]
+    },
+    {
+      "parameters":{"operation":"executeQuery","query":"with sold as (update inventory_items set status='SOLD', sold_at=$1::timestamptz, sold_platform=$2, updated_at=now() where sku=$3 and status <> 'SOLD' returning id,cost_pence) insert into sales(source_event_id,platform,inventory_id,external_order_id,sale_pence,platform_fee_pence,postage_pence,cost_pence,sold_at) select $4,$2,id,$5,$6,$7,$8,cost_pence,$1::timestamptz from sold on conflict (platform,source_event_id) do nothing returning *;","options":{"queryReplacement":"={{ [$json.soldAt,$json.platform,$json.sku,$json.eventId,$json.orderId,$json.salePence,$json.feePence,$json.postagePence] }}"}},
+      "id":"sale-db",
+      "name":"Mark SKU Sold + Record Sale",
+      "type":"n8n-nodes-base.postgres",
+      "typeVersion":2.5,
+      "position":[0,0]
+    },
+    {
+      "parameters":{"method":"POST","url":"={{ $env.ALBA_SHOPIFY_DELIST_URL || 'https://YOUR-N8N-WEBHOOK/shopify/delist' }}","sendBody":true,"contentType":"json","jsonBody":"={{ JSON.stringify({sku:$json.sku,eventId:$json.eventId}) }}","options":{"timeout":10000}},
+      "id":"shopify-delist",
+      "name":"Delist Shopify",
+      "type":"n8n-nodes-base.httpRequest",
+      "typeVersion":4.2,
+      "position":[260,-220],
+      "continueOnFail":true
+    },
+    {
+      "parameters":{"method":"POST","url":"={{ $env.ALBA_EBAY_DELIST_URL || 'https://YOUR-N8N-WEBHOOK/ebay/delist' }}","sendBody":true,"contentType":"json","jsonBody":"={{ JSON.stringify({sku:$json.sku,eventId:$json.eventId}) }}","options":{"timeout":10000}},
+      "id":"ebay-delist",
+      "name":"Delist eBay",
+      "type":"n8n-nodes-base.httpRequest",
+      "typeVersion":4.2,
+      "position":[260,0],
+      "continueOnFail":true
+    },
+    {
+      "parameters":{"method":"POST","url":"={{ $env.ALBA_DEPOP_DELIST_URL || 'https://YOUR-N8N-WEBHOOK/depop/delist' }}","sendBody":true,"contentType":"json","jsonBody":"={{ JSON.stringify({sku:$json.sku,eventId:$json.eventId}) }}","options":{"timeout":10000}},
+      "id":"depop-delist",
+      "name":"Delist Depop",
+      "type":"n8n-nodes-base.httpRequest",
+      "typeVersion":4.2,
+      "position":[260,220],
+      "continueOnFail":true
+    },
+    {
+      "parameters":{"operation":"append","documentId":{"__rl":true,"mode":"id","value":"YOUR_GOOGLE_SHEET_ID"},"sheetName":{"__rl":true,"mode":"name","value":"Sales"},"columns":{"mappingMode":"defineBelow","value":{"Date":"={{$json.soldAt}}","SKU":"={{$json.sku}}","Platform":"={{$json.platform}}","Sale":"={{$json.salePence/100}}","Fees":"={{$json.feePence/100}}","Postage":"={{$json.postagePence/100}}"}},"options":{}},
+      "id":"sheets",
+      "name":"Append Bookkeeping Row",
+      "type":"n8n-nodes-base.googleSheets",
+      "typeVersion":4.5,
+      "position":[520,0]
+    }
+  ],
+  "connections":{
+    "Marketplace Sale Webhook":{"main":[[{"node":"Normalise Sale Event","type":"main","index":0}]]},
+    "Normalise Sale Event":{"main":[[{"node":"Record / Deduplicate Event","type":"main","index":0}]]},
+    "Record / Deduplicate Event":{"main":[[{"node":"Mark SKU Sold + Record Sale","type":"main","index":0}]]},
+    "Mark SKU Sold + Record Sale":{"main":[[{"node":"Delist Shopify","type":"main","index":0},{"node":"Delist eBay","type":"main","index":0},{"node":"Delist Depop","type":"main","index":0},{"node":"Append Bookkeeping Row","type":"main","index":0}]]}
+  },
+  "active":false,
+  "settings":{"executionOrder":"v1"},
+  "versionId":"alba-sale-router-v1",
+  "meta":{"templateCredsSetupCompleted":false}
+}
