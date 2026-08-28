@@ -13,8 +13,14 @@ async function sessionToken() {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow the login page and login endpoint through without authentication.
+  // Login and its API endpoint must remain public.
   if (pathname === '/login' || pathname === '/api/login') {
+    return NextResponse.next()
+  }
+
+  // Next.js static assets must also remain public. Otherwise the auth redirect
+  // returns the login HTML instead of JS/CSS, causing MIME and 404 errors.
+  if (pathname.startsWith('/_next/') || pathname === '/favicon.ico') {
     return NextResponse.next()
   }
 
@@ -27,7 +33,7 @@ export async function proxy(request: NextRequest) {
 
   const loginUrl = request.nextUrl.clone()
   loginUrl.pathname = '/login'
-  loginUrl.searchParams.set('from', pathname)
+  loginUrl.search = ''
   return NextResponse.redirect(loginUrl)
 }
 
