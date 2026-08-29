@@ -63,13 +63,14 @@ export default function Home() {
           <div className="sourcing-stats"><div><strong>{suppliers.length}</strong><span>suppliers</span></div><div><strong>{suppliers.filter(s=>s.confidence==='High' || s.confidence==='Very high').length}</strong><span>strong candidates</span></div><div><strong>PK</strong><span>source market</span></div></div>
         </div>
         <div className="source-tabs">{sourcingTabs.map(t=><button key={t} className={sourceTab===t?'active':''} onClick={()=>setSourceTab(t)}>{t}</button>)}</div>
-        <div className="supplier-grid">{visibleSuppliers.map(s=><article className="supplier card" key={s.name}>
-          <div className="supplier-image-wrap"><img className="supplier-image" src={s.image} alt={`${s.name} logo`} loading="lazy" /></div>
-          <div className="supplier-top"><span className="supplier-tag">{s.tag}</span><span className={`confidence ${s.confidence.toLowerCase().replace(' ','-')}`}>{s.confidence}</span></div>
-          <h3>{s.name}</h3>
-          <p className="supplier-cat">{s.categories}</p>
-          <div className="supplier-metrics"><div><strong>{s.rating}★</strong><span>rating</span></div><div><strong>{s.repeat}+</strong><span>repeat buyers</span></div><div><strong>{s.dispatch}</strong><span>dispatch</span></div></div>
-          <a className="supplier-link" href={s.url} target="_blank" rel="noreferrer">Open supplier ↗</a>
+        <div className="supplier-grid">{visibleSuppliers.map(s=><article className="supplier card" key={s.name} style={{backgroundImage:`linear-gradient(rgba(8,10,9,.58),rgba(8,10,9,.82)),url("${s.image}")`}}>
+          <div className="supplier-content">
+            <div className="supplier-top"><span className="supplier-tag">{s.tag}</span><span className={`confidence ${s.confidence.toLowerCase().replace(' ','-')}`}>{s.confidence}</span></div>
+            <h3>{s.name}</h3>
+            <p className="supplier-cat">{s.categories}</p>
+            <div className="supplier-metrics"><div><strong>{s.rating}★</strong><span>rating</span></div><div><strong>{s.repeat}+</strong><span>repeat buyers</span></div><div><strong>{s.dispatch}</strong><span>dispatch</span></div></div>
+            <a className="supplier-link" href={s.url} target="_blank" rel="noreferrer">Open supplier ↗</a>
+          </div>
         </article>)}</div>
         <div className="note sourcing-note"><strong>Buying rule:</strong> ratings and repeat buyers are signals, not guarantees. Start with small test bundles, record landed cost and sell-through, then scale the suppliers that produce repeatable winners. Fleek also states that delivery/customs vary by destination and that buyer protection applies to qualifying problems.</div>
       </div>}
